@@ -1,0 +1,26 @@
+# Build directories
+build/
+bin/
+out/
+*.o
+*.ko
+*.mod
+*.mod.c
+*.mod.o
+*.order
+*.symvers
+.tmp_versions/
+*.cmd
+.cache.mk
+*.d
+
+# OS / IDE
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# Logs & temp
+*.log
+/tmp/
