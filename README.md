@@ -59,6 +59,217 @@ This project follows a rigorous 6-stage engineering development process. Full do
 
 ---
 
+## 📐 UML Diagrams
+
+### 1. UML Class Diagram
+The Class Diagram models the object-oriented design, the Hardware Abstraction Layer (HAL), and the warehouse domain entities:
+
+```mermaid
+classDiagram
+    class IDeviceDriver {
+        <<interface>>
+        +connect() bool
+        +disconnect() void
+        +readEvent(wms_scan_event_t& outEvent, int timeoutMs) bool
+        +setBayLock(uint32_t bayId, bool lock) bool
+        +getBayLock(uint32_t bayId, bool& outLocked) bool
+        +getStatus(wms_device_status_t& outStatus) bool
+        +simulateScan(const wms_scan_event_t& event) bool
+        +resetBuffer() bool
+        +isConnected() bool
+    }
+
+    class LinuxCharDevice {
+        -int fd_
+        -string devicePath_
+        -atomic~bool~ isConnected_
+        +connect() bool
+        +disconnect() void
+        +readEvent(wms_scan_event_t& outEvent, int timeoutMs) bool
+        +setBayLock(uint32_t bayId, bool lock) bool
+        +getBayLock(uint32_t bayId, bool& outLocked) bool
+        +getStatus(wms_device_status_t& outStatus) bool
+        +simulateScan(const wms_scan_event_t& event) bool
+        +resetBuffer() bool
+    }
+
+    class SimulatedDevice {
+        -atomic~bool~ isConnected_
+        -queue~wms_scan_event_t~ eventQueue_
+        -mutex mutex_
+        -condition_variable cv_
+        -vector~bool~ bayLocks_
+        +connect() bool
+        +disconnect() void
+        +readEvent(wms_scan_event_t& outEvent, int timeoutMs) bool
+        +setBayLock(uint32_t bayId, bool lock) bool
+        +getBayLock(uint32_t bayId, bool& outLocked) bool
+        +getStatus(wms_device_status_t& outStatus) bool
+        +simulateScan(const wms_scan_event_t& event) bool
+        +resetBuffer() bool
+    }
+
+    class InventoryManager {
+        -map~string, shared_ptr~WarehouseZone~~ zones_
+        -map~uint32_t, shared_ptr~StorageBay~~ bays_
+        -mutex mutex_
+        +addZone(shared_ptr~WarehouseZone~ zone) void
+        +addBay(shared_ptr~StorageBay~ bay) void
+        +intakeItemFromScan(const wms_scan_event_t& scan) optional~uint32_t~
+        +dispatchItem(const string& sku, int qty, vector~uint32_t~& cleared) bool
+        +setBayLock(uint32_t bayId, bool lock) bool
+        +getWarehouseOccupancyRate() float
+    }
+
+    class StorageBay {
+        -uint32_t bayId_
+        -string zoneId_
+        -float maxWeightKg_
+        -float currentWeightKg_
+        -bool isLocked_
+        -bool isOccupied_
+        -optional~Item~ storedItem_
+        +canAccommodate(const Item& item) bool
+        +depositItem(const Item& item) bool
+        +retrieveItem() optional~Item~
+        +setLock(bool locked) void
+        +getState() BayState
+    }
+
+    class WarehouseZone {
+        -string zoneId_
+        -string zoneName_
+        -ItemCategory allowedCategory_
+        -map~uint32_t, shared_ptr~StorageBay~~ bays_
+        +addBay(shared_ptr~StorageBay~ bay) void
+        +getAllBays() vector~shared_ptr~StorageBay~~
+        +getOccupancyPercentage() float
+    }
+
+    class OrderProcessor {
+        -InventoryManager& inventory_
+        -vector~Order~ orders_
+        -mutex mutex_
+        +submitOrder(const Order& order) bool
+        +processOrder(const string& orderId) bool
+        +getPendingOrders() vector~Order~
+        +getFulfilledCount() size_t
+    }
+
+    class SharedMemoryState {
+        -string shmName_
+        -int shmFd_
+        -WmsSharedTelemetry* sharedData_
+        -bool isMaster_
+        +initialize(bool createAsMaster) bool
+        +update(uint32_t scans, uint32_t locks, uint32_t items, float occupancy, const string& barcode) void
+        +readTelemetry(WmsSharedTelemetry& outTelemetry) bool
+        +cleanup() void
+    }
+
+    class TerminalDashboard {
+        -InventoryManager& inventory_
+        -OrderProcessor& orders_
+        -IDeviceDriver& driver_
+        -SharedMemoryState& shm_
+        +renderHeader() void
+        +renderBayGrid() void
+        +renderTelemetryBar() void
+        +renderRecentEvents(const vector~string~& events) void
+        +renderMenu() void
+    }
+
+    IDeviceDriver <|-- LinuxCharDevice : implements
+    IDeviceDriver <|-- SimulatedDevice : implements
+    InventoryManager *-- WarehouseZone : contains
+    WarehouseZone o-- StorageBay : aggregates
+    OrderProcessor o-- InventoryManager : queries & updates
+    TerminalDashboard o-- InventoryManager : visualizes
+    TerminalDashboard o-- OrderProcessor : visualizes
+    TerminalDashboard o-- IDeviceDriver : controls
+    TerminalDashboard o-- SharedMemoryState : publishes
+```
+
+---
+
+### 2. UML Sequence Diagram: Hardware Scan Intake & Bay Locking
+Illustrates the interaction flow from the physical RFID/barcode scanner gate through the Linux kernel driver, wait queues, userspace C++ worker thread, automatic zone placement, electromagnetic solenoid actuation via IOCTL, and POSIX shared memory updates:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Hardware as RFID / Barcode Scanner Gate
+    participant Kernel as Linux Driver (/dev/wms_driver)
+    participant Worker as C++ Worker Thread
+    participant HAL as LinuxCharDevice (HAL)
+    participant IM as InventoryManager
+    participant Bay as StorageBay Solenoid
+    participant SHM as POSIX Shared Memory
+
+    Hardware->>Kernel: Hardware scan event generated
+    Kernel->>Kernel: mutex_lock_interruptible(&dev->lock)
+    Kernel->>Kernel: Enqueue wms_scan_event_t into 64-slot FIFO
+    Kernel->>Kernel: wake_up_interruptible(&dev->read_wait)
+    Kernel->>Kernel: mutex_unlock(&dev->lock)
+
+    Worker->>HAL: readEvent(outEvent, timeoutMs=200)
+    HAL->>Kernel: poll(POLLIN | POLLRDNORM)
+    Kernel-->>HAL: POLLIN Ready
+    HAL->>Kernel: read(deviceFd, &event, sizeof(event))
+    Kernel->>Kernel: copy_to_user()
+    Kernel-->>HAL: Bytes transferred
+    HAL-->>Worker: Return wms_scan_event_t
+
+    Worker->>IM: intakeItemFromScan(event)
+    IM->>IM: Deduce category & find optimal free bay in zone
+    IM-->>Worker: Bay allocated (e.g. Bay #1)
+
+    Worker->>HAL: setBayLock(bayId=1, lock=true)
+    HAL->>Kernel: ioctl(WMS_IOCTL_SET_BAY_LOCK, bay_id=1, lock_state=1)
+    Kernel->>Bay: Engage electromagnetic solenoid lock
+    Kernel-->>HAL: IOCTL Success (0)
+    HAL-->>Worker: Lock Confirmed
+
+    Worker->>IM: Deposit cargo into Bay #1
+    IM->>Bay: depositItem(item) -> isOccupied = true
+
+    Worker->>HAL: setBayLock(bayId=1, lock=false)
+    HAL->>Kernel: ioctl(WMS_IOCTL_SET_BAY_LOCK, bay_id=1, lock_state=0)
+    Kernel->>Bay: Release solenoid lock
+    Kernel-->>HAL: IOCTL Success (0)
+
+    Worker->>SHM: update(scans, locks, items, occupancy, barcode)
+    SHM-->>Worker: POSIX mmap segment updated
+```
+
+---
+
+### 3. UML State Machine Diagram: Storage Bay Operational Lifecycle
+Captures the state transitions of individual warehouse storage bays, including hardware electromagnetic interlocks and safety protections:
+
+```mermaid
+stateDiagram-v2
+    [*] --> EMPTY_UNLOCKED: Bay Initialized
+
+    EMPTY_UNLOCKED --> LOCKING_FOR_INTAKE: Scan Detected (write/IOCTL)
+    note right of LOCKING_FOR_INTAKE: Solenoid engaged via WMS_IOCTL_SET_BAY_LOCK
+
+    LOCKING_FOR_INTAKE --> OCCUPIED_LOCKED: Pallet Deposited & Load Cell Calibrated
+    OCCUPIED_LOCKED --> OCCUPIED_SECURE: Placement Verified & Solenoid Released
+    note right of OCCUPIED_SECURE: Normal secure holding state
+
+    OCCUPIED_SECURE --> LOCKING_FOR_PICK: Customer Order Pick Requested
+    LOCKING_FOR_PICK --> PICKING_IN_PROGRESS: Solenoid Released & Goods Retrieved
+    PICKING_IN_PROGRESS --> EMPTY_UNLOCKED: Pallet Removed & Weight Scale Zeroed
+
+    OCCUPIED_SECURE --> MAINTENANCE_LOCKED: Manual Maintenance Lock (IOCTL)
+    MAINTENANCE_LOCKED --> OCCUPIED_SECURE: Maintenance Completed & Lock Released
+
+    note left of MAINTENANCE_LOCKED: Safety Interlock: Order fulfillment is strictly blocked while locked
+```
+
+---
+
 ## 🚀 Quick Start Guide
 
 ### 1. Prerequisites (Ubuntu / Linux / WSL2)
