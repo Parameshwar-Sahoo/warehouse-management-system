@@ -18,6 +18,10 @@ demo: app
 	@echo "=== Running Live System Demonstration ==="
 	./build/wms_app --demo
 
+dashboard:
+	@echo "=== Launching Interactive Web Dashboard ==="
+	@bash scripts/open_dashboard.sh || true
+
 clean:
 	@echo "=== Cleaning Project Artifacts ==="
 	$(MAKE) -C driver clean || true
