@@ -64,6 +64,11 @@ This project follows a rigorous 6-stage engineering development process. Full do
 ### 1. UML Class Diagram
 The Class Diagram models the object-oriented architecture, the Hardware Abstraction Layer (HAL), and domain entities:
 
+![UML Class Diagram](docs/images/uml_class_diagram.svg)
+
+<details>
+<summary><b>Click to expand Mermaid Class Diagram code</b></summary>
+
 ```mermaid
 classDiagram
     class IDeviceDriver {
@@ -189,11 +194,17 @@ classDiagram
     TerminalDashboard o-- IDeviceDriver : controls
     TerminalDashboard o-- SharedMemoryState : publishes
 ```
+</details>
 
 ---
 
 ### 2. UML Sequence Diagram: Hardware Scan Intake & Bay Locking
 Illustrates the interaction flow from the physical RFID/barcode scanner gate through the Linux kernel driver, wait queues, userspace C++ worker thread, automatic zone placement, electromagnetic solenoid actuation via IOCTL, and POSIX shared memory updates:
+
+![UML Sequence Diagram](docs/images/uml_sequence_diagram.svg)
+
+<details>
+<summary><b>Click to expand Mermaid Sequence Diagram code</b></summary>
 
 ```mermaid
 sequenceDiagram
@@ -241,11 +252,17 @@ sequenceDiagram
     Worker->>SHM: update(scans, locks, items, occupancy, barcode)
     SHM-->>Worker: POSIX mmap segment updated
 ```
+</details>
 
 ---
 
 ### 3. UML State Machine Diagram: Storage Bay Operational Lifecycle
 Captures the state transitions of individual warehouse storage bays, including hardware electromagnetic interlocks and safety protections:
+
+![UML State Machine Diagram](docs/images/uml_state_machine.svg)
+
+<details>
+<summary><b>Click to expand Mermaid State Machine code</b></summary>
 
 ```mermaid
 stateDiagram-v2
@@ -267,8 +284,7 @@ stateDiagram-v2
 
     note left of MAINTENANCE_LOCKED: Safety Interlock: Order fulfillment is strictly blocked while locked
 ```
-
----
+</details>
 
 ## 🖥️ Interactive Web & Terminal Dashboards
 
