@@ -62,7 +62,7 @@ This project follows a rigorous 6-stage engineering development process. Full do
 ## 📐 UML Diagrams
 
 ### 1. UML Class Diagram
-The Class Diagram models the object-oriented design, the Hardware Abstraction Layer (HAL), and the warehouse domain entities:
+The Class Diagram models the object-oriented architecture, the Hardware Abstraction Layer (HAL), and domain entities:
 
 ```mermaid
 classDiagram
@@ -270,6 +270,21 @@ stateDiagram-v2
 
 ---
 
+## 🖥️ Interactive Web & Terminal Dashboards
+
+This project provides two interfaces for real-time monitoring and control:
+
+1. **Interactive Web Dashboard (`web/index.html`)**:
+   - Modern browser-based 24-bay dynamic rack layout with live color coding (Empty, Occupied, Locked).
+   - Interactive clickable padlocks to toggle electromagnetic solenoid locks via IOCTL.
+   - Cargo intake scanner simulation, order dispatching with safety interlocks, and POSIX shared memory inspector.
+   - Launch with `make dashboard` or double-click [`web/index.html`](web/index.html).
+
+2. **Interactive Terminal Console Dashboard (`./build/wms_app`)**:
+   - High-performance ANSI color terminal dashboard with live 24-bay grid, telemetry bar, event stream, and interactive menu.
+
+---
+
 ## 🚀 Quick Start Guide
 
 ### 1. Prerequisites (Ubuntu / Linux / WSL2)
@@ -305,6 +320,12 @@ make demo
 Launch the interactive ANSI dashboard to manually trigger scans, dispatch orders, actuate bay locks via IOCTL, and inspect telemetry:
 ```bash
 ./build/wms_app
+```
+
+### 6. Launch Interactive Web Dashboard
+```bash
+make dashboard
+# or open web/index.html in any browser
 ```
 
 ---
@@ -363,6 +384,8 @@ warehouse-management-system/
 │   ├── ipc/
 │   ├── ui/
 │   └── main.cpp                  # Entry point
+├── web/                          # Interactive Web Dashboard
+│   └── index.html                # Visual 24-bay browser interface
 ├── tests/                        # Comprehensive Test Suites
 │   ├── CMakeLists.txt
 │   ├── test_inventory.cpp
@@ -372,6 +395,7 @@ warehouse-management-system/
 │   ├── load_driver.sh
 │   ├── unload_driver.sh
 │   ├── simulate_scans.sh
+│   ├── open_dashboard.sh
 │   └── run_demo.sh
 └── docs/                         # Formal 6-Stage Reports
     ├── STAGE1_PROJECT_INTRODUCTION.md
